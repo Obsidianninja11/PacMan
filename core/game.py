@@ -36,7 +36,9 @@ class TitleScene(sceneHandler):
 
     def processInput(self, events, pressed_keys):
         for event in events:
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN:
+            if ((event.type == pygame.KEYDOWN and event.key == pygame.K_RETURN) or 
+                event.type == pygame.JOYAXISMOTION or
+                event.type == pygame.JOYBUTTONDOWN):
                 # Move to the next scene when the user pressed Enter
                 self.changeScene(GameScene())
 
@@ -45,7 +47,7 @@ class TitleScene(sceneHandler):
 
     def sceneRender(self, screen):
         # For the sake of brevity, the title scene is a blank red screen
-        screen.fill((50, 0, 0))
+        screen.fill((0, 0, 0))
 
 # TODO: Move into its own file
 class GameScene(sceneHandler):
@@ -114,7 +116,7 @@ class GameScene(sceneHandler):
     angle = -45
 
     def isValidMove(self, new_x, new_y):
-        return self.grid[int(new_y)][int(new_x)] == 0
+        return self.grid[int(new_y) % self.GRID_HEIGHT][int(new_x) % self.GRID_WIDTH] == 0
 
     def __init__(self):
         sceneHandler.__init__(self)
@@ -126,38 +128,30 @@ class GameScene(sceneHandler):
                     if event.key == pygame.K_DELETE:
                         # Move to the next scene when the user pressed Delete
                         self.changeScene(TitleScene())
-                # case pygame.JOYDEVICEADDED:
-                #     print("Joystick added")
-                #     joysticks = []
-                #     for i in range(pygame.joystick.get_count()):
-                #         joy = pygame.joystick.Joystick(i)
-                #         joy.init()
-                #         joysticks.append(joy)
-                #         print(f"Initialized joystick {i}: {joy.get_name()}")
-                # case pygame.JOYDEVICEREMOVED:
-                #     print("Joystick removed")
-
-                # case pygame.JOYBUTTONDOWN:
-                #     # for _ in range(event.button - len(joystick_controls["button_pressed"]) + 1):
-                #     #     joystick_controls["button_pressed"].append(False)
+                case pygame.JOYBUTTONDOWN:
+                    # for _ in range(event.button - len(joystick_controls["button_pressed"]) + 1):
+                    #     joystick_controls["button_pressed"].append(False)
                     
-                #     # joystick_controls["button_pressed"][event.button] = True
-                #     print(f"Button {event.button} pressed on joystick {event.instance_id}")
-                # case pygame.JOYBUTTONUP:
-                #     # for _ in range(event.button - len(joystick_controls["button_pressed"]) + 1):
-                #     #     joystick_controls["button_pressed"].append(False)
+                    # joystick_controls["button_pressed"][event.button] = True
+                    print(f"Game: Button {event.button} pressed on joystick {event.instance_id}")
+                case pygame.JOYBUTTONUP:
+                    # for _ in range(event.button - len(joystick_controls["button_pressed"]) + 1):
+                    #     joystick_controls["button_pressed"].append(False)
             
-                #     # joystick_controls["button_pressed"][event.button] = False
-                #     print(f"Button {event.button} released on joystick {event.instance_id}")
+                    # joystick_controls["button_pressed"][event.button] = False
+                    print(f"Game: Button {event.button} released on joystick {event.instance_id}")
 
-                # case pygame.JOYAXISMOTION:
-                #     print(event)
-                #     # joystick_controls["axis"][event.axis] = event.value
-                #     # if event.axis == 0:
-                #     #     self.desired_dir = [round(event.value), 0]
-                #     # else:
-                #     #     self.desired_dir = [0, round(event.value)]
-                #     print(f"Axis {event.axis} moved to {event.value} on joystick {event.instance_id}")
+                case pygame.JOYAXISMOTION:
+                    # print(event)
+                    # joystick_controls["axis"][event.axis] = event.value
+                    # if event.axis == 0:
+                    #     self.desired_dir = [round(event.value), 0]
+                    # else:
+                    #     self.desired_dir = [0, round(event.value)]
+                    if event.value != 0:
+                        self.desired_dir = [0, 0]
+                        self.desired_dir[event.axis] = round(event.value)
+                    print(f"Game: Axis {event.axis} moved to {event.value} on joystick {event.instance_id}  {self.desired_dir}")
 
         if any(pressed_keys[key] for key in key_map["up"]):
             self.desired_dir = [0, -1]
@@ -176,11 +170,11 @@ class GameScene(sceneHandler):
             self.curr_dir = self.desired_dir
         if self.isValidMove(self.x_pos + self.curr_dir[0], self.y_pos + self.curr_dir[1]):
             if (self.curr_dir[0] != 0):
-                self.x_pos += self.curr_dir[0]
+                self.x_pos = (self.x_pos + self.curr_dir[0]) % self.GRID_WIDTH
                 # self.y_pos = int(self.y_pos)
             elif (self.curr_dir[1] != 0):
                 # self.x_pos = int(self.x_pos)
-                self.y_pos += self.curr_dir[1]
+                self.y_pos = (self.y_pos + self.curr_dir[1]) % self.GRID_HEIGHT
 
         self.angle = (self.curr_dir[1] + 2 if self.curr_dir[0] == 0 else self.curr_dir[0] + 3) * 90
 
@@ -190,14 +184,14 @@ class GameScene(sceneHandler):
     def sceneRender(self, screen):
         screen.fill((10, 10, 10))
         image_scale = min(width // self.GRID_WIDTH, height // self.GRID_HEIGHT)
-        
+        center_offset = (width - image_scale * self.GRID_WIDTH) // 2
         for y, row in enumerate(self.image_grid):
             for x, image in enumerate(row):
-                screen.blit(pygame.transform.scale(image, (image_scale, image_scale)), (image_scale * x, image_scale * y))
+                screen.blit(pygame.transform.scale(image, (image_scale, image_scale)), (image_scale * x + center_offset, image_scale * y))
 
         pacman = pygame.transform.rotate(pygame.transform.scale(self.tiles["pacman"], (image_scale, image_scale)), self.angle - 45)
         rect = pacman.get_rect() # I multiply the steps by 0 to temporarily disable the smooth movement
-        rect.center = (image_scale * (self.x_pos + 0.5 + 0*self.step/STEPS * self.curr_dir[0]), image_scale * (self.y_pos + 0.5  + 0*self.step/STEPS * self.curr_dir[1]))# tiles["pacman"].get_rect().center
+        rect.center = (image_scale * (self.x_pos + 0.5 + 0*self.step/STEPS * self.curr_dir[0] ) + center_offset, image_scale * (self.y_pos + 0.5  + 0*self.step/STEPS * self.curr_dir[1]))# tiles["pacman"].get_rect().center
         screen.blit(pacman, rect)
 
 active_scene = TitleScene()
@@ -222,37 +216,15 @@ while active_scene != None:
                 width = event.size[0]
                 height = event.size[1]
             case pygame.JOYDEVICEADDED:
-                print("Joystick added")
+                print("Main: Joystick added")
                 joysticks = []
                 for i in range(pygame.joystick.get_count()):
                     joy = pygame.joystick.Joystick(i)
                     joy.init()
                     joysticks.append(joy)
-                    print(f"Initialized joystick {i}: {joy.get_name()}")
+                    print(f"Main: Initialized joystick {i}: {joy.get_name()}")
             case pygame.JOYDEVICEREMOVED:
-                print("Joystick removed")
-
-            case pygame.JOYBUTTONDOWN:
-                # for _ in range(event.button - len(joystick_controls["button_pressed"]) + 1):
-                #     joystick_controls["button_pressed"].append(False)
-                
-                # joystick_controls["button_pressed"][event.button] = True
-                print(f"Button {event.button} pressed on joystick {event.instance_id}")
-            case pygame.JOYBUTTONUP:
-                # for _ in range(event.button - len(joystick_controls["button_pressed"]) + 1):
-                #     joystick_controls["button_pressed"].append(False)
-        
-                # joystick_controls["button_pressed"][event.button] = False
-                print(f"Button {event.button} released on joystick {event.instance_id}")
-
-            case pygame.JOYAXISMOTION:
-                # print(event)
-                # joystick_controls["axis"][event.axis] = event.value
-                # if event.axis == 0:
-                #     self.desired_dir = [round(event.value), 0]
-                # else:
-                #     self.desired_dir = [0, round(event.value)]
-                print(f"Axis {event.axis} moved to {event.value} on joystick {event.instance_id}")
+                print("Main: Joystick removed")
 
         if quit_attempt:
             active_scene.endGame() # Also should exit here I think? since it causes an error when the scene tries to render # There are some things maybe we want to do when it quits like saving and stuff
