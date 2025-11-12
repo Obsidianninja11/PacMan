@@ -1,10 +1,6 @@
 # UAA PacMan 
-
-Lorem ipsum
+A PacMan clone made with pygame.
 
 ## Requirements
 
-These are
-
 ## UI Section
-
