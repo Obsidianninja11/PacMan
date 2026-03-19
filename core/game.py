@@ -3,7 +3,6 @@ import pygame
 import json
 from pathlib import Path
 from core.sceneManager import sceneHandler
-# TODO: Import all the scenes at once
 
 # The rest is code where you implement your game using the Scenes model
 SETTINGS_PATH = Path(__file__).resolve().parent.parent / "data" / "usrSettings.json"
@@ -48,6 +47,32 @@ class TitleScene(sceneHandler):
     def sceneRender(self, screen):
         # For the sake of brevity, the title scene is a blank red screen
         screen.fill((0, 0, 0))
+
+class XYPair():
+    # TODO: Switch to using floats for smooth movement
+    x: int
+    y: int
+
+    def __init__(self, x: int, y: int):
+        self.x = x
+        self.y = y
+
+    def __add__(self, other: "XYPair") -> "XYPair":
+        return XYPair(self.x + other.x, self.y + other.y)
+
+    def __sub__(self, other: "XYPair") -> "XYPair": # Prob not needed
+        return XYPair(self.x - other.x, self.y - other.y)
+
+    def __mul__(self, multiplier: int):
+        return XYPair(self.x * multiplier, self.y * multiplier)
+    
+    def __mod__(self, modulus: "XYPair"):
+        return XYPair(self.x % modulus.x, self.y % modulus.y)
+
+    # String representation, e.g. when printing
+    def __repr__(self):
+        # :>2 means right align with length 2 (pad with spaces)
+        return f"(x:{self.x:>2}, y:{self.y:>2})"
 
 # TODO: Move into its own file
 class GameScene(sceneHandler):
@@ -103,20 +128,22 @@ class GameScene(sceneHandler):
         image_grid.append([])
         for x in range(GRID_WIDTH):
             if (grid[y][x] == 1):
+                # TODO: Terrible code to detect the correct tile to use
                 index = (grid[y-1][x] == 0 or y == 0)*8 + (grid[y][(x+1) % GRID_WIDTH] == 0 or x == (GRID_WIDTH - 1))*4 + (grid[(y+1) % GRID_HEIGHT][x] == 0 or y == (GRID_HEIGHT - 1))*2 + (grid[y][x-1] == 0 or x == 0)
                 image_grid[y].append(tiles[index])
             else:
                 image_grid[y].append(tiles[0])
 
-    x_pos = 1
-    y_pos = 1
     step = 0
-    curr_dir = [1, 0] # [x, y]
+    curr_dir = XYPair(1, 0)
     desired_dir = curr_dir
     angle = -45
 
-    def isValidMove(self, new_x, new_y):
-        return self.grid[int(new_y) % self.GRID_HEIGHT][int(new_x) % self.GRID_WIDTH] == 0
+    coord = XYPair(1, 1)
+
+    def isValidMove(self, coord: XYPair):
+        # TODO: Allow indexing directly with coord?
+        return self.grid[int(coord.y) % self.GRID_HEIGHT][int(coord.x) % self.GRID_WIDTH] == 0
 
     def __init__(self):
         sceneHandler.__init__(self)
@@ -149,41 +176,46 @@ class GameScene(sceneHandler):
                     # else:
                     #     self.desired_dir = [0, round(event.value)]
                     if event.value != 0:
-                        self.desired_dir = [0, 0]
-                        self.desired_dir[event.axis] = round(event.value)
+                        if (event.axis == 0):
+                            self.desired_dir = XYPair(round(event.value), 0)
+                        elif (event.axis == 1):
+                            self.desired_dir = XYPair(0, round(event.value))
                     print(f"Game: Axis {event.axis} moved to {event.value} on joystick {event.instance_id}  {self.desired_dir}")
 
         if any(pressed_keys[key] for key in key_map["up"]):
-            self.desired_dir = [0, -1]
+            self.desired_dir = XYPair(0, -1)
         elif any(pressed_keys[key] for key in key_map["down"]):
-            self.desired_dir = [0, 1]
+            self.desired_dir = XYPair(0, 1)
         elif any(pressed_keys[key] for key in key_map["left"]):
-            self.desired_dir = [-1, 0]
+            self.desired_dir = XYPair(-1, 0)
         elif any(pressed_keys[key] for key in key_map["right"]):
-            self.desired_dir = [1, 0]
+            self.desired_dir = XYPair(1, 0)
 
         self.step = (self.step + 1) % STEPS
         if self.step != 0:
             return
     
-        if self.isValidMove(self.x_pos + self.desired_dir[0], self.y_pos + self.desired_dir[1]):
+        # print(f"{self.desired_dir=} {self.curr_dir=}")
+        # print(f"{self.coord + self.curr_dir = }")
+        if self.isValidMove(self.coord + self.desired_dir):
             self.curr_dir = self.desired_dir
-        if self.isValidMove(self.x_pos + self.curr_dir[0], self.y_pos + self.curr_dir[1]):
-            if (self.curr_dir[0] != 0):
-                self.x_pos = (self.x_pos + self.curr_dir[0]) % self.GRID_WIDTH
-                # self.y_pos = int(self.y_pos)
-            elif (self.curr_dir[1] != 0):
-                # self.x_pos = int(self.x_pos)
-                self.y_pos = (self.y_pos + self.curr_dir[1]) % self.GRID_HEIGHT
 
-        self.angle = (self.curr_dir[1] + 2 if self.curr_dir[0] == 0 else self.curr_dir[0] + 3) * 90
+        if self.isValidMove(self.coord + self.curr_dir):
+            if (self.curr_dir.x != 0):
+                self.coord.x = (self.coord.x + self.curr_dir.x) % self.GRID_WIDTH
+                # self.y_pos = int(self.y_pos)
+            elif (self.curr_dir.y != 0):
+                # self.x_pos = int(self.x_pos)
+                self.coord.y = (self.coord.y + self.curr_dir.y) % self.GRID_HEIGHT
+
+        self.angle = (self.curr_dir.y + 2 if self.curr_dir.x == 0 else self.curr_dir.x + 3) * 90
 
     def gameUpdate(self):
         pass
 
     def sceneRender(self, screen):
         screen.fill((10, 10, 10))
-        image_scale = min(width // self.GRID_WIDTH, height // self.GRID_HEIGHT)
+        image_scale = min(width // self.GRID_WIDTH, height // self.GRID_HEIGHT) # TODO: Use xypair?
         center_offset = (width - image_scale * self.GRID_WIDTH) // 2
         for y, row in enumerate(self.image_grid):
             for x, image in enumerate(row):
@@ -191,7 +223,7 @@ class GameScene(sceneHandler):
 
         pacman = pygame.transform.rotate(pygame.transform.scale(self.tiles["pacman"], (image_scale, image_scale)), self.angle - 45)
         rect = pacman.get_rect() # I multiply the steps by 0 to temporarily disable the smooth movement
-        rect.center = (image_scale * (self.x_pos + 0.5 + 0*self.step/STEPS * self.curr_dir[0] ) + center_offset, image_scale * (self.y_pos + 0.5  + 0*self.step/STEPS * self.curr_dir[1]))# tiles["pacman"].get_rect().center
+        rect.center = (image_scale * (self.coord.x + 0.5) + center_offset, image_scale * (self.coord.y + 0.5))# tiles["pacman"].get_rect().center
         screen.blit(pacman, rect)
 
 active_scene = TitleScene()
